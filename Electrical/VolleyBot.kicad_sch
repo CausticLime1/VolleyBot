@@ -8147,16 +8147,6 @@
 		)
 		(uuid "c124602b-3fe9-4a1e-bf9d-170e1e026e91")
 	)
-	(label "VBATT"
-		(at 257.81 147.955 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "c564d8cb-8126-41a5-bf5c-deebc6589bae")
-	)
 	(label "BOOT0"
 		(at 102.87 62.23 0)
 		(effects
@@ -8186,16 +8176,6 @@
 			(justify right bottom)
 		)
 		(uuid "dab4ec31-847e-4688-a751-c2240c5a5b3c")
-	)
-	(label "VBATT"
-		(at 262.255 212.09 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e32fa604-1c39-4597-859c-12bd665f4130")
 	)
 	(label "USART1_RX"
 		(at 146.05 82.55 0)
@@ -9329,7 +9309,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "TerminalBlock:TerminalBlock_MaiXu_MX126-5.0-02P_1x02_P5.00mm"
+		(property "Footprint" "Rocketry_Manual:Screw_Terminal_2_Pins"
 			(at 72.39 200.66 0)
 			(effects
 				(font
@@ -11677,6 +11657,71 @@
 			(project "VolleyBot"
 				(path "/ccc4a57f-b426-4aed-bfc6-2903311eec96"
 					(reference "#PWR09")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+BATT")
+		(at 262.255 212.09 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "5f29c0b6-c777-49cc-b801-e643fef3260f")
+		(property "Reference" "#PWR048"
+			(at 262.255 215.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+BATT"
+			(at 262.255 207.01 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 262.255 212.09 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 262.255 212.09 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+BATT\""
+			(at 262.255 212.09 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "aa00207f-0f07-4e97-9407-1b396cf4f29c")
+		)
+		(instances
+			(project "VolleyBot"
+				(path "/ccc4a57f-b426-4aed-bfc6-2903311eec96"
+					(reference "#PWR048")
 					(unit 1)
 				)
 			)
@@ -15467,6 +15512,71 @@
 			(project "VolleyBot"
 				(path "/ccc4a57f-b426-4aed-bfc6-2903311eec96"
 					(reference "C10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+BATT")
+		(at 257.81 147.955 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ef9a8dce-9484-4954-86fe-af57a502162a")
+		(property "Reference" "#PWR011"
+			(at 257.81 151.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+BATT"
+			(at 257.81 142.875 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 257.81 147.955 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 257.81 147.955 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+BATT\""
+			(at 257.81 147.955 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "c675e750-67ff-4b8b-af7e-d01339d6d1ae")
+		)
+		(instances
+			(project "VolleyBot"
+				(path "/ccc4a57f-b426-4aed-bfc6-2903311eec96"
+					(reference "#PWR011")
 					(unit 1)
 				)
 			)
