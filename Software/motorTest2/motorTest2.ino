@@ -1,26 +1,22 @@
 #include <Wire.h>
 
-//Angles related to gyro
 float rollRate, pitchRate, yawRate;
 float rollCal, pitchCal, yawCal;
 float accX, accY, accZ;
 float roll, pitch;
 
-
-//Motor 1 Pins
-
-const int motor11APin = 26;
-const int motor12APin = 27;
+const int motor11APin = PA0;
+const int motor12APin = PA1;
 
 //Motor 2 Pins
 
-const int motor21APin = 19;
-const int motor22APin = 23;
+const int motor21APin = PA3;
+const int motor22APin = PA2;
 
 //Motor 3 Pins
 
-const int motor31APin = 4;
-const int motor32APin = 14;
+const int motor31APin = PA6;
+const int motor32APin = PA7;
 
 //Motor Control
 
@@ -43,9 +39,9 @@ float PIDPitch = 0;
 
 //PID Tuning
 
-float gainP = 0;
-float gainI = 0;
-float gainD = 0;
+float gainP = 1;
+float gainI = 1;
+float gainD = 1;
 
 //Variables for the kalman filter
 float kalmanAngleRoll = 0, kalmanUncertaintyAngleRoll = 2*2;
@@ -53,6 +49,7 @@ float kalmanAnglePitch = 0, kalmanUncertaintyAnglePitch = 2*2;
 float kalman1DOutput[] = {0, 0};
 
 uint32_t loopTimer; 
+
 
 void gyroSignals(void){
 
@@ -118,26 +115,19 @@ void calibrateGyro() {
   yawCal = yawSum / 500.0f;
 }
 
+
 void setup() {
+  // put your setup code here, to run once:
   Serial.begin(115200);
-  Wire.setClock(400000);
-  Wire.setSDA(PB9);
-  Wire.setSCL(PB8);
+  pinMode(PB12, OUTPUT);
+  Wire.setSDA(PB7);
+  Wire.setSCL(PB6);
   Wire.begin();
   delay(250);
   Wire.beginTransmission(0x68);
   Wire.write(0x6B);
   Wire.write(0x00);
   Wire.endTransmission();
-  
-  pinMode(motor11APin, OUTPUT);
-  pinMode(motor12APin, OUTPUT);
-
-  pinMode(motor21APin, OUTPUT);
-  pinMode(motor22APin, OUTPUT);
-
-  pinMode(motor31APin, OUTPUT);
-  pinMode(motor32APin, OUTPUT);
 
   calibrateGyro();
 }
@@ -164,9 +154,7 @@ void kalman_1d(float* KalmanState, float* KalmanUncertainty, float KalmanInput, 
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   gyroSignals();
-
   rollRate -= rollCal;
   pitchRate -= pitchCal;
   yawRate -= yawCal;
