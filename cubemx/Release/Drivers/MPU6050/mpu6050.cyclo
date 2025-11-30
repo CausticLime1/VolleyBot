@@ -1,0 +1,2 @@
+../Drivers/MPU6050/mpu6050.c:10:6:MPU6050_Init	1
+../Drivers/MPU6050/mpu6050.c:15:6:MPU6050_ReadAccelGyro	2
