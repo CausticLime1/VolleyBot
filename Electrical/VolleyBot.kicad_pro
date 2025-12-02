@@ -48,7 +48,7 @@
         "silk_text_thickness": 0.1,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.25
+          "min_clearance": 0.2
         }
       },
       "diff_pair_dimensions": [
@@ -142,8 +142,8 @@
         "min_text_thickness": 0.08,
         "min_through_hole_diameter": 0.3,
         "min_track_width": 0.16,
-        "min_via_annular_width": 0.1,
-        "min_via_diameter": 0.5,
+        "min_via_annular_width": 0.075,
+        "min_via_diameter": 0.45,
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": true
       },
@@ -194,9 +194,13 @@
       "track_widths": [
         0.0,
         0.1016,
+        0.2032,
         0.254,
+        0.3048,
+        0.3302,
         0.4064,
         0.508,
+        0.762,
         1.016
       ],
       "tuning_pattern_settings": {
@@ -231,11 +235,7 @@
           "drill": 0.0
         },
         {
-          "diameter": 0.4,
-          "drill": 0.3
-        },
-        {
-          "diameter": 0.7,
+          "diameter": 0.45,
           "drill": 0.3
         }
       ],
@@ -518,8 +518,8 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "Manufacturing/",
-      "pos_files": "Manufacturing/",
+      "plot": "Manufacturing V2/",
+      "pos_files": "Manufacturing V2/",
       "specctra_dsn": "",
       "step": "",
       "svg": "",
@@ -529,7 +529,7 @@
   },
   "schematic": {
     "annotate_start_num": 0,
-    "bom_export_filename": "Manufacturing\\VolleyBot.csv",
+    "bom_export_filename": "C:\\Users\\ryans\\OneDrive\\Documents\\Personal Projects\\Mechatronics Projects\\VolleyBot\\Electrical\\Manufacturing V2\\VolleyBot.csv",
     "bom_fmt_presets": [],
     "bom_fmt_settings": {
       "field_delimiter": ",",
