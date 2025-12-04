@@ -9925,7 +9925,7 @@
 			(at 0 -4 0)
 			(layer "F.SilkS")
 			(hide yes)
-			(uuid "695f5891-813a-41ef-9f6a-af266440d5d2")
+			(uuid "2a63edf6-2fc3-4f7e-a0a4-622963d9c1b4")
 			(effects
 				(font
 					(size 1 1)
@@ -9936,7 +9936,7 @@
 		(property "Value" "SS34_C8678"
 			(at 0 4 0)
 			(layer "F.Fab")
-			(uuid "e92a34b4-c0f5-4c46-b8fd-c082c8c396f5")
+			(uuid "1ae41723-68d1-44b6-9eef-43534a76cb22")
 			(effects
 				(font
 					(size 1 1)
@@ -9948,7 +9948,7 @@
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "e15cb453-76fd-42eb-9438-9f0e19aab405")
+			(uuid "19ecfc36-4050-4c95-b40b-25a4f30270b6")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9960,7 +9960,7 @@
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "3e7151f3-cc77-423a-a32d-00921bf6d741")
+			(uuid "aab2d3d6-4552-468a-81d5-cfdb7014e517")
 			(effects
 				(font
 					(size 1.27 1.27)
