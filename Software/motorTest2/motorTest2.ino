@@ -1,7 +1,12 @@
+#include <cmath>
+
+//Digital Pins
 #define BUZZER_PIN PB8
 #define LED_PIN PB12
 #define IMU_SDA PB7
 #define IMU_CLK PB6
+
+//Motor Pins
 #define M1_F PA0
 #define M1_B PA1
 #define M2_F PA2
@@ -9,6 +14,12 @@
 #define M3_F PA6
 #define M3_B PA7
 
+//Battery Variables
+#define VREF 3.3
+#define BATT_STAT PB0
+#define BATT_VOLT PB1
+
+//Timing Variables
 const int loopTimer = 1000;
 unsigned long currentMillis = 0;
 unsigned long previousMillis = 0;
@@ -128,6 +139,7 @@ void updateStartupSequence() {
       }
       if (now - lastChange >= 500) {
         noTone(BUZZER_PIN);
+        digitalWrite(BUZZER_PIN, LOW);
         isNotePlaying = false; // Reset for next state
         lastChange = now;
         state = 2; 
@@ -154,6 +166,7 @@ void updateStartupSequence() {
       // Logic to stop the note after duration
       if (now - lastChange >= noteDuration) {
         noTone(BUZZER_PIN);
+        digitalWrite(BUZZER_PIN, LOW);
         
         // Wait for a small "silence" gap (30% of note duration)
         if (now - lastChange >= (noteDuration * 1.3)) {
@@ -167,11 +180,54 @@ void updateStartupSequence() {
 
     case 4: // Finished
       noTone(BUZZER_PIN);
+      digitalWrite(BUZZER_PIN, LOW);
+      break;
+  }
+}
+
+void updateLEDTimer(unsigned long onTime, unsigned long offTime, int totalBlinks) {
+  static int state = 0;              // 0: Idle, 1: LED ON, 2: LED OFF
+  static unsigned long lastChange = 0;
+  static int currentBlinks = 0;
+  unsigned long now = millis();
+
+  switch (state) {
+    case 0: // Idle state - wait for a reason to blink
+      if (currentBlinks < totalBlinks) {
+        state = 1; 
+        lastChange = now; 
+      }
+      break;
+
+    case 1: // LED is ON
+      digitalWrite(LED_PIN, HIGH);
+      if (now - lastChange >= onTime) {
+        lastChange = now;
+        state = 2; // Move to the OFF portion of the blink
+      }
+      break;
+
+    case 2: // LED is OFF
+      digitalWrite(LED_PIN, LOW); // Ensure pin is pulled to 0V
+      if (now - lastChange >= offTime) {
+        lastChange = now;
+        currentBlinks++; // We finished one full blink cycle
+        
+        if (currentBlinks >= totalBlinks) {
+          state = 0; // Finished all blinks, go back to Idle
+          // Safety: ensure it stays off
+          digitalWrite(LED_PIN, LOW); 
+        } else {
+          state = 1; // Start the next blink
+        }
+      }
       break;
   }
 }
 
 void setup(){
+
+  //Motor Pin Setup
   pinMode(M1_F, OUTPUT);
   pinMode(M1_B, OUTPUT);
   pinMode(M2_F, OUTPUT);
@@ -179,14 +235,29 @@ void setup(){
   pinMode(M3_F, OUTPUT);
   pinMode(M3_B, OUTPUT);
 
+  //Buzzer and LED Pin
   pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  //BATT Pins
+  pinMode(BATT_STAT, INPUT);
+  pinMode(BATT_VOLT, INPUT);
 }
+
+float batteryVoltage = 0; 
+int batteryChargeStatus = 0;
 
 void loop(){
   currentMillis = millis();
   updateStartupSequence();
   if (currentMillis - previousMillis >= loopTimer){
     previousMillis = currentMillis;
+    batteryVoltage = analogRead(BATT_VOLT) * VREF/1023 * 25/10;
+    batteryChargeStatus = digitalRead(BATT_STAT);
+    Serial.print("Battery Voltage: ");
+    Serial.print(batteryVoltage);
+    Serial.print("\tBattery Charge Status: ");
+    Serial.println(batteryChargeStatus);
   }
   
 }
