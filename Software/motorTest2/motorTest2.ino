@@ -1,10 +1,11 @@
 #include <cmath>
+#include <Wire.h>
+#include <STM32FreeRTOS.h>
+#include <queue.h>
 
 //Digital Pins
 #define BUZZER_PIN PB8
 #define LED_PIN PB12
-#define IMU_SDA PB7
-#define IMU_CLK PB6
 
 //Motor Pins
 #define M1_F PA0
@@ -19,214 +20,34 @@
 #define BATT_STAT PB0
 #define BATT_VOLT PB1
 
-//Timing Variables
-const int loopTimer = 1000;
-unsigned long currentMillis = 0;
-unsigned long previousMillis = 0;
+//IMU Variables
+#define IMU_ADDR 0x68
+#define IMU_SDA PB7
+#define IMU_CLK PB6
 
-void startupBuzz(){
-  static int step = 0;
-  static long lastChange = 0;
-  currentMillis = millis();
-
-  switch (step){
-    case 0:
-      tone(BUZZER_PIN, 392);
-      step = 1;
-      lastChange = currentMillis;
-
-    case 1:
-      if (currentMillis - lastChange >= 400){
-        noTone(BUZZER_PIN);
-        lastChange = currentMillis;
-        step = 2;
-      }
-    case 2:
-      if (currentMillis - lastChange >= 200){
-        tone(BUZZER_PIN, 587);
-        lastChange = currentMillis;
-        step = 3;
-      }
-    case 3:
-      if (currentMillis - lastChange >= 500) {
-        noTone(BUZZER_PIN);
-        step = 4; 
-      }
-      break;
-    case 4: 
-      break;
-  }
-}
-
-void motorStartupTest(){
-  static int motorStep = 0;
-  currentMillis = millis();
-  static int motorLastChange = 0;
-
-  switch (motorStep){
-    case 0:
-      analogWrite(M1_F, 128);
-      analogWrite(M2_F, 128);
-      analogWrite(M3_F, 128);
-      motorStep = 1;
-    case 1:
-      if (currentMillis - motorLastChange > 5000){
-        analogWrite(M1_F, 0);
-        analogWrite(M2_F, 0);
-        analogWrite(M3_F, 0);
-        motorStep = 2;
-      }
-    case 2:
-      break;
-  }
-  
-}
-
-#define NOTE_C4  262
-#define NOTE_D4  294
-#define NOTE_E4  330
-#define NOTE_F4  349
-#define NOTE_G4  392
-#define NOTE_A4  440
-#define NOTE_AS4 466
-#define NOTE_C5  523
-
-int melody[] = {
-  NOTE_C4, NOTE_F4, NOTE_F4, NOTE_G4, NOTE_F4, NOTE_E4, NOTE_D4, NOTE_D4,
-  NOTE_D4, NOTE_G4, NOTE_G4, NOTE_A4, NOTE_G4, NOTE_F4, NOTE_E4, NOTE_C4,
-  NOTE_C4, NOTE_A4, NOTE_A4, NOTE_AS4, NOTE_A4, NOTE_G4, NOTE_F4, NOTE_D4,
-  NOTE_C4, NOTE_C4, NOTE_D4, NOTE_G4, NOTE_E4, NOTE_F4
+struct IMUData{
+  float ax, ay, az;
+  float gx, gy, gz;
+  uint32_t time;
 };
 
-int durations[] = {
-  4, 4, 8, 8, 8, 8, 4, 4,
-  4, 4, 8, 8, 8, 8, 4, 4,
-  4, 4, 8, 8, 8, 8, 4, 4,
-  8, 8, 4, 4, 4, 2
+float axCali = 0, ayCali = 0, azCali = 0, gxCali, gyCali, gzCali;
+
+SemaphoreHandle_t i2cMutex;
+QueueHandle_t imuQueue;
+
+//Startup Beeps 
+int startupNotes[] = {392, 587};
+
+struct BeepCommand{
+  int frequency;
+  int durationMs;
 };
 
-int totalNotes = sizeof(melody) / sizeof(int);
-
-void updateStartupSequence() {
-  static int state = 0;             
-  static int noteIndex = 0;          
-  static unsigned long lastChange = 0;
-  static bool isNotePlaying = false; // The flag to prevent repeating calls
-  unsigned long now = millis();
-
-  int noteDuration; 
-
-  switch (state) {
-    case 0: // Startup Tone 1
-      if (!isNotePlaying) {
-        tone(BUZZER_PIN, 392);
-        isNotePlaying = true;
-        lastChange = now;
-      }
-      if (now - lastChange >= 200) {
-        noTone(BUZZER_PIN);
-        isNotePlaying = false; // Reset for next state
-        lastChange = now;
-        state = 1;
-      }
-      break;
-
-    case 1: // Startup Tone 2
-      if (!isNotePlaying) {
-        tone(BUZZER_PIN, 587);
-        isNotePlaying = true;
-        lastChange = now;
-      }
-      if (now - lastChange >= 500) {
-        noTone(BUZZER_PIN);
-        digitalWrite(BUZZER_PIN, LOW);
-        isNotePlaying = false; // Reset for next state
-        lastChange = now;
-        state = 2; 
-      }
-      break;
-
-    case 2: // The 1-Second Wait
-      if (now - lastChange >= 1000) {
-        lastChange = now;
-        state = 3; 
-      }
-      break;
-
-    case 3: // Christmas Song
-      noteDuration = 1000 / durations[noteIndex]; 
-      
-      // Only start the note if it's not already playing
-      if (!isNotePlaying) {
-        tone(BUZZER_PIN, melody[noteIndex]);
-        isNotePlaying = true;
-        lastChange = now;
-      }
-
-      // Logic to stop the note after duration
-      if (now - lastChange >= noteDuration) {
-        noTone(BUZZER_PIN);
-        digitalWrite(BUZZER_PIN, LOW);
-        
-        // Wait for a small "silence" gap (30% of note duration)
-        if (now - lastChange >= (noteDuration * 1.3)) {
-          isNotePlaying = false; // Allow next note to start
-          noteIndex++;
-          lastChange = now;
-          if (noteIndex >= totalNotes) state = 4;
-        }
-      }
-      break;
-
-    case 4: // Finished
-      noTone(BUZZER_PIN);
-      digitalWrite(BUZZER_PIN, LOW);
-      break;
-  }
-}
-
-void updateLEDTimer(unsigned long onTime, unsigned long offTime, int totalBlinks) {
-  static int state = 0;              // 0: Idle, 1: LED ON, 2: LED OFF
-  static unsigned long lastChange = 0;
-  static int currentBlinks = 0;
-  unsigned long now = millis();
-
-  switch (state) {
-    case 0: // Idle state - wait for a reason to blink
-      if (currentBlinks < totalBlinks) {
-        state = 1; 
-        lastChange = now; 
-      }
-      break;
-
-    case 1: // LED is ON
-      digitalWrite(LED_PIN, HIGH);
-      if (now - lastChange >= onTime) {
-        lastChange = now;
-        state = 2; // Move to the OFF portion of the blink
-      }
-      break;
-
-    case 2: // LED is OFF
-      digitalWrite(LED_PIN, LOW); // Ensure pin is pulled to 0V
-      if (now - lastChange >= offTime) {
-        lastChange = now;
-        currentBlinks++; // We finished one full blink cycle
-        
-        if (currentBlinks >= totalBlinks) {
-          state = 0; // Finished all blinks, go back to Idle
-          // Safety: ensure it stays off
-          digitalWrite(LED_PIN, LOW); 
-        } else {
-          state = 1; // Start the next blink
-        }
-      }
-      break;
-  }
-}
+QueueHandle_t beepQueue;
 
 void setup(){
-
+  Serial.begin(115200);
   //Motor Pin Setup
   pinMode(M1_F, OUTPUT);
   pinMode(M1_B, OUTPUT);
@@ -242,22 +63,134 @@ void setup(){
   //BATT Pins
   pinMode(BATT_STAT, INPUT);
   pinMode(BATT_VOLT, INPUT);
+
+  //Setting Up IMU
+  Wire.setSCL(IMU_CLK);
+  Wire.setSDA(IMU_SDA);
+
+  Wire.begin();
+  Wire.setClock(400000);
+
+  i2cMutex = xSemaphoreCreateMutex();
+
+  imuQueue = xQueueCreate(1, sizeof(IMUData));
+  beepQueue = xQueueCreate(10, sizeof(BeepCommand));
+
+  xTaskCreate(vStartupTask, "Start", 512, NULL, 4, NULL);
+
+  vTaskStartScheduler();
 }
 
-float batteryVoltage = 0; 
-int batteryChargeStatus = 0;
+void vStartupTask(void *pvParameters){
+  Wire.begin();
+
+  long sumGx = 0, sumGy = 0, sumGz = 0;
+
+  int samples = 500;
+  for(int i = 0; i < samples; i++){
+    Wire.beginTransmission(IMU_ADDR);
+    Wire.write(0x3B);
+    Wire.endTransmission(false);
+    Wire.requestFrom(IMU_ADDR, 6);
+    if (Wire.available() == 6){
+      sumGx += (int16_t)(Wire.read() << 8 | Wire.read());
+      sumGy += (int16_t)(Wire.read() << 8 | Wire.read());
+      sumGz += (int16_t)(Wire.read() << 8 | Wire.read()); 
+    }
+    vTaskDelay(pdMS_TO_TICKS(2));
+  }
+  gxCali = (float)sumGx / samples;
+  gyCali = (float)sumGy / samples;
+  gzCali = (float)sumGz / samples;
+
+  xTaskCreate(vIMUTask, "IMU", 512, NULL, 3, NULL);
+  xTaskCreate(vDebugTask, "DBUG", 512, NULL, 1, NULL);
+  xTaskCreate(vBuzzerTask, "Buzz", 256, NULL, 1, NULL);
+  startupBeeps();
+  vTaskDelete(NULL);
+}
+
+void startupBeeps(){
+  BeepCommand beep1 = {392, 500};
+  BeepCommand beep2 = {587, 500};
+  xQueueSend(beepQueue, &beep1, pdMS_TO_TICKS(10));
+  xQueueSend(beepQueue, &beep2, pdMS_TO_TICKS(10));
+}
+
+void vBuzzerTask(void *pvParameters) {
+    BeepCommand cmd;
+    for (;;) {
+        if (xQueueReceive(beepQueue, &cmd, portMAX_DELAY)) {
+            tone(BUZZER_PIN, cmd.frequency);
+            vTaskDelay(pdMS_TO_TICKS(cmd.durationMs)); 
+            noTone(BUZZER_PIN);
+            
+            // Short silence between beeps so they don't bleed together
+            vTaskDelay(pdMS_TO_TICKS(50)); 
+        }
+    }
+}
+
+void vIMUTask(void *pvParameters){
+  IMUData curIMUData;
+  int16_t rawAx, rawAy, rawAz, temp, rawGx, rawGy, rawGz;
+  while(true){
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    bool dataReady = false;
+    if (xSemaphoreTake(i2cMutex, pdMS_TO_TICKS(5))){
+      Wire.beginTransmission(IMU_ADDR);
+      Wire.write(0x3B);
+      if (Wire.endTransmission() == 0 && Wire.requestFrom(IMU_ADDR, (uint8_t)14) == 14){
+        rawAx = (Wire.read() << 8) | Wire.read();
+        rawAy = (Wire.read() << 8) | Wire.read();
+        rawAy = (Wire.read() << 8) | Wire.read();
+        temp = (Wire.read() << 8) | Wire.read();
+        rawGx = (Wire.read() << 8) | Wire.read();
+        rawGy = (Wire.read() << 8) | Wire.read();
+        rawGz = (Wire.read() << 8) | Wire.read();
+
+        dataReady = true;
+      }
+      xSemaphoreGive(i2cMutex);
+    }
+    if (dataReady){
+      curIMUData.ax = ((float)rawAx / 16384.0) - axCali;
+      curIMUData.ay = ((float)rawAy / 16384.0) - ayCali;
+      curIMUData.az = ((float)rawAz / 16384.0) - azCali;
+      curIMUData.gx = ((float)rawGx / 131.0) - gxCali;
+      curIMUData.gy = ((float)rawGy / 131.0) - gyCali;
+      curIMUData.gz = ((float)rawGz / 131.0) - gzCali;
+
+      xQueueOverwrite(imuQueue, &curIMUData);
+    }
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(5));
+  }
+}
+
+void vDebugTask(void *pvParameters) {
+    IMUData displayData;
+
+    for (;;) {
+        // xQueuePeek looks at the data without removing it from the queue.
+        // This allows the Motor Task to still get the same data later.
+        if (xQueuePeek(imuQueue, &displayData, portMAX_DELAY)) {
+            
+            // Format for Serial Plotter (Label:Value)
+            Serial.print("AccX:"); Serial.print(displayData.ax); Serial.print(",");
+            Serial.print("AccY:"); Serial.print(displayData.ay); Serial.print(",");
+            Serial.print("AccZ:"); Serial.print(displayData.az); Serial.print(",");
+            
+            Serial.print("GyroX:"); Serial.print(displayData.gx); Serial.print(",");
+            Serial.print("GyroY:"); Serial.print(displayData.gy); Serial.print(",");
+            Serial.print("GyroZ:"); Serial.println(displayData.gz); 
+        }
+
+        // Print 10 times per second (100ms delay)
+        // This prevents the Serial buffer from choking.
+        vTaskDelay(pdMS_TO_TICKS(100)); 
+    }
+}
 
 void loop(){
-  currentMillis = millis();
-  updateStartupSequence();
-  if (currentMillis - previousMillis >= loopTimer){
-    previousMillis = currentMillis;
-    batteryVoltage = analogRead(BATT_VOLT) * VREF/1023 * 25/10;
-    batteryChargeStatus = digitalRead(BATT_STAT);
-    Serial.print("Battery Voltage: ");
-    Serial.print(batteryVoltage);
-    Serial.print("\tBattery Charge Status: ");
-    Serial.println(batteryChargeStatus);
-  }
-  
 }
