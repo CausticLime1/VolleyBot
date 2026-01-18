@@ -25,6 +25,8 @@
 #define IMU_SDA PB7
 #define IMU_CLK PB6
 
+#define ERRORTONE 3000
+
 struct IMUData{
   float ax, ay, az;
   float gx, gy, gz;
@@ -47,30 +49,6 @@ struct BeepCommand{
 QueueHandle_t beepQueue;
 
 void setup(){
-  Serial.begin(115200);
-  //Motor Pin Setup
-  pinMode(M1_F, OUTPUT);
-  pinMode(M1_B, OUTPUT);
-  pinMode(M2_F, OUTPUT);
-  pinMode(M2_B, OUTPUT);
-  pinMode(M3_F, OUTPUT);
-  pinMode(M3_B, OUTPUT);
-
-  //Buzzer and LED Pin
-  pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(LED_PIN, OUTPUT);
-
-  //BATT Pins
-  pinMode(BATT_STAT, INPUT);
-  pinMode(BATT_VOLT, INPUT);
-
-  //Setting Up IMU
-  Wire.setSCL(IMU_CLK);
-  Wire.setSDA(IMU_SDA);
-
-  Wire.begin();
-  Wire.setClock(400000);
-
   i2cMutex = xSemaphoreCreateMutex();
 
   imuQueue = xQueueCreate(1, sizeof(IMUData));
@@ -82,27 +60,72 @@ void setup(){
 }
 
 void vStartupTask(void *pvParameters){
+  //Pin Setup
+  pinMode(BATT_STAT, INPUT);
+  pinMode(BATT_VOLT, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  //Setting up IMU
+  Wire.setSCL(IMU_CLK);
+  Wire.setSDA(IMU_SDA);
+  recoverI2CBus(IMU_CLK, IMU_SDA);
   Wire.begin();
+  Wire.setClock(400000);
+  Wire.setTimeout(3000);
 
-  long sumGx = 0, sumGy = 0, sumGz = 0;
+  Wire.beginTransmission(0x68);
+  Wire.write(0x6B);
+  Wire.write(0x00);
 
-  int samples = 500;
-  for(int i = 0; i < samples; i++){
-    Wire.beginTransmission(IMU_ADDR);
-    Wire.write(0x3B);
-    Wire.endTransmission(false);
-    Wire.requestFrom(IMU_ADDR, 6);
-    if (Wire.available() == 6){
-      sumGx += (int16_t)(Wire.read() << 8 | Wire.read());
-      sumGy += (int16_t)(Wire.read() << 8 | Wire.read());
-      sumGz += (int16_t)(Wire.read() << 8 | Wire.read()); 
+  if (Wire.endTransmission() == 0){
+    Serial.println("IMU found. Configuring.");
+      //Configure Digital Low Pass Filter
+    Wire.beginTransmission(0x68);
+    Wire.write(0x1A);
+    Wire.write(0x03);
+    Wire.endTransmission();
+
+    //Configure Gyro Scale
+    Wire.beginTransmission(0x68);
+    Wire.write(0x1B);
+    Wire.write(0x00);
+    Wire.endTransmission();
+
+    //Configure Accel Scale
+    Wire.beginTransmission(0x68);
+    Wire.write(0x1C);
+    Wire.write(0x00);
+    Wire.endTransmission();
+
+    //Calibration of Gyro
+    long sumGx = 0, sumGy = 0, sumGz = 0;
+
+    int samples = 500;
+    for(int i = 0; i < samples; i++){
+      Wire.beginTransmission(IMU_ADDR);
+      Wire.write(0x43);
+      Wire.endTransmission(false);
+      Wire.requestFrom(IMU_ADDR, 6);
+      if (Wire.available() == 6){
+        sumGx += (int16_t)(Wire.read() << 8 | Wire.read());
+        sumGy += (int16_t)(Wire.read() << 8 | Wire.read());
+        sumGz += (int16_t)(Wire.read() << 8 | Wire.read()); 
+      }
+      vTaskDelay(pdMS_TO_TICKS(2));
     }
-    vTaskDelay(pdMS_TO_TICKS(2));
+    gxCali = (float)sumGx / samples;
+    gyCali = (float)sumGy / samples;
+    gzCali = (float)sumGz / samples;
   }
-  gxCali = (float)sumGx / samples;
-  gyCali = (float)sumGy / samples;
-  gzCali = (float)sumGz / samples;
 
+  else {
+    Serial.println("IMU not found. Hardware failure.");
+    BeepCommand errorBuzz = {3000, 1000};
+    xQueueSend(beepQueue, &errorBuzz, 0); 
+  }
+
+  //Creation of RTOS tasks
   xTaskCreate(vIMUTask, "IMU", 512, NULL, 3, NULL);
   xTaskCreate(vDebugTask, "DBUG", 512, NULL, 1, NULL);
   xTaskCreate(vBuzzerTask, "Buzz", 256, NULL, 1, NULL);
@@ -110,25 +133,42 @@ void vStartupTask(void *pvParameters){
   vTaskDelete(NULL);
 }
 
+void recoverI2CBus(int SCL, int SDA) {
+  pinMode(IMU_SDA, INPUT_PULLUP);
+  pinMode(IMU_CLK, OUTPUT);
+
+  if (digitalRead(IMU_SDA) == LOW) {
+    Serial.println("I2C Bus Stuck! Attempting recovery...");
+    for (int i = 0; i < 9; i++) {
+      digitalWrite(IMU_CLK, HIGH);
+      delayMicroseconds(5);
+      digitalWrite(IMU_CLK, LOW);
+      delayMicroseconds(5);
+    }
+  }
+  digitalWrite(IMU_CLK, HIGH);
+  pinMode(IMU_SDA, INPUT); 
+}
+
 void startupBeeps(){
-  BeepCommand beep1 = {392, 500};
+  BeepCommand beep1 = {392, 250};
   BeepCommand beep2 = {587, 500};
   xQueueSend(beepQueue, &beep1, pdMS_TO_TICKS(10));
   xQueueSend(beepQueue, &beep2, pdMS_TO_TICKS(10));
 }
 
 void vBuzzerTask(void *pvParameters) {
-    BeepCommand cmd;
-    for (;;) {
-        if (xQueueReceive(beepQueue, &cmd, portMAX_DELAY)) {
-            tone(BUZZER_PIN, cmd.frequency);
-            vTaskDelay(pdMS_TO_TICKS(cmd.durationMs)); 
-            noTone(BUZZER_PIN);
-            
-            // Short silence between beeps so they don't bleed together
-            vTaskDelay(pdMS_TO_TICKS(50)); 
-        }
+  BeepCommand cmd;
+  for (;;) {
+    if (xQueueReceive(beepQueue, &cmd, portMAX_DELAY)) {
+      tone(BUZZER_PIN, cmd.frequency);
+      vTaskDelay(pdMS_TO_TICKS(cmd.durationMs)); 
+      noTone(BUZZER_PIN);
+      digitalWrite(BUZZER_PIN, LOW);
+      
+      vTaskDelay(pdMS_TO_TICKS(50)); 
     }
+  }
 }
 
 void vIMUTask(void *pvParameters){
@@ -141,10 +181,10 @@ void vIMUTask(void *pvParameters){
     if (xSemaphoreTake(i2cMutex, pdMS_TO_TICKS(5))){
       Wire.beginTransmission(IMU_ADDR);
       Wire.write(0x3B);
-      if (Wire.endTransmission() == 0 && Wire.requestFrom(IMU_ADDR, (uint8_t)14) == 14){
+      if (Wire.endTransmission() == 0 && Wire.requestFrom(IMU_ADDR, 14) == 14){
         rawAx = (Wire.read() << 8) | Wire.read();
         rawAy = (Wire.read() << 8) | Wire.read();
-        rawAy = (Wire.read() << 8) | Wire.read();
+        rawAz = (Wire.read() << 8) | Wire.read();
         temp = (Wire.read() << 8) | Wire.read();
         rawGx = (Wire.read() << 8) | Wire.read();
         rawGy = (Wire.read() << 8) | Wire.read();
@@ -155,13 +195,12 @@ void vIMUTask(void *pvParameters){
       xSemaphoreGive(i2cMutex);
     }
     if (dataReady){
-      curIMUData.ax = ((float)rawAx / 16384.0) - axCali;
-      curIMUData.ay = ((float)rawAy / 16384.0) - ayCali;
-      curIMUData.az = ((float)rawAz / 16384.0) - azCali;
-      curIMUData.gx = ((float)rawGx / 131.0) - gxCali;
-      curIMUData.gy = ((float)rawGy / 131.0) - gyCali;
-      curIMUData.gz = ((float)rawGz / 131.0) - gzCali;
-
+      curIMUData.ax = ((float)rawAx / 16384.0);
+      curIMUData.ay = ((float)rawAy / 16384.0) + 0.03;
+      curIMUData.az = ((float)rawAz / 16384.0);
+      curIMUData.gx = ((float)rawGx - gxCali) / 131.0;
+      curIMUData.gy = ((float)rawGy - gyCali) / 131.0;
+      curIMUData.gz = ((float)rawGz - gzCali) / 131.0;
       xQueueOverwrite(imuQueue, &curIMUData);
     }
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(5));
@@ -169,27 +208,27 @@ void vIMUTask(void *pvParameters){
 }
 
 void vDebugTask(void *pvParameters) {
-    IMUData displayData;
+  IMUData displayData;
 
-    for (;;) {
-        // xQueuePeek looks at the data without removing it from the queue.
-        // This allows the Motor Task to still get the same data later.
-        if (xQueuePeek(imuQueue, &displayData, portMAX_DELAY)) {
-            
-            // Format for Serial Plotter (Label:Value)
-            Serial.print("AccX:"); Serial.print(displayData.ax); Serial.print(",");
-            Serial.print("AccY:"); Serial.print(displayData.ay); Serial.print(",");
-            Serial.print("AccZ:"); Serial.print(displayData.az); Serial.print(",");
-            
-            Serial.print("GyroX:"); Serial.print(displayData.gx); Serial.print(",");
-            Serial.print("GyroY:"); Serial.print(displayData.gy); Serial.print(",");
-            Serial.print("GyroZ:"); Serial.println(displayData.gz); 
-        }
-
-        // Print 10 times per second (100ms delay)
-        // This prevents the Serial buffer from choking.
-        vTaskDelay(pdMS_TO_TICKS(100)); 
+  for (;;) {
+    // xQueuePeek looks at the data without removing it from the queue.
+    // This allows the Motor Task to still get the same data later.
+    if (xQueuePeek(imuQueue, &displayData, portMAX_DELAY)) {
+        
+      // Format for Serial Plotter (Label:Value)
+      Serial.print("AccX:"); Serial.print(displayData.ax); Serial.print(",");
+      Serial.print("AccY:"); Serial.print(displayData.ay); Serial.print(",");
+      Serial.print("AccZ:"); Serial.print(displayData.az); Serial.print(",");
+      
+      Serial.print("GyroX:"); Serial.print(displayData.gx); Serial.print(",");
+      Serial.print("GyroY:"); Serial.print(displayData.gy); Serial.print(",");
+      Serial.print("GyroZ:"); Serial.println(displayData.gz); 
     }
+
+    // Print 10 times per second (100ms delay)
+    // This prevents the Serial buffer from choking.
+    vTaskDelay(pdMS_TO_TICKS(100)); 
+  }
 }
 
 void loop(){
